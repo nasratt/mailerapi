@@ -57,7 +57,7 @@ app.post(
 
       res.status(403).json({
         success: false,
-        message: errors
+        message: errors.join(' ')
       });
       return;
     }
