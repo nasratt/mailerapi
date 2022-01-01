@@ -2,8 +2,8 @@ import express from 'express';
 import nodemailer from 'nodemailer';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
-
-import { validateEmail } from './validation.js';
+import { body, validationResult } from 'express-validator';
+import sanitizeHtml from 'sanitize-html';
 
 const app = express();
 app.use(express.json());
@@ -37,42 +37,57 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-app.post('/mailto', (req, res) => {
-  const { reciever, emailBody, subject } = req.body;
-  if (
-    !validateEmail(reciever) ||
-    emailBody.trim() === '' ||
-    subject.trim() === ''
-  ) {
-    res.status(403).json({
-      success: false,
-      message: 'Request was unsuccessful due to invalid body.'
-    });
-  }
+app.post(
+  '/mailto',
+  body('reciever').isEmail().withMessage('value is not an email!'),
+  body(['from', 'subject', 'text'])
+    .not()
+    .isEmpty()
+    .escape()
+    .trim()
+    .withMessage('value can not be empty!'),
+  (req, res) => {
+    const { from, reciever, subject, text, html } = req.body;
+    const validationRes = validationResult(req);
 
-  // Message object
-  let message = {
-    from: `Janm Asti <${USER}>`,
-    to: `${reciever}`,
-    subject: `${subject}`,
-    text: `${emailBody}`
-  };
+    if (!validationRes.isEmpty()) {
+      const errors = validationRes
+        .array()
+        .map(({ msg, param }) => `${param} ${msg}`);
 
-  transporter.sendMail(message, (err, info) => {
-    if (err) {
-      console.log('Error occurred. ' + err.message);
-      res.json({
+      res.status(403).json({
         success: false,
-        message: 'Something went wrong, email could not be sent!'
+        message: errors
       });
-      transporter.close();
       return;
     }
 
-    res.json({ success: true, message: 'Email sent successfully!' });
-  });
-});
+    // Message object
+    let message = {
+      from: `${from} <${USER}>`,
+      to: `${reciever}`,
+      subject: `${subject}`,
+      text: `${text}`,
+      html: `${sanitizeHtml(html || '')}`
+    };
+
+    transporter.sendMail(message, (err, info) => {
+      if (err) {
+        console.log('Error: ' + err.message);
+        res.status(500).json({
+          success: false,
+          message: 'Something went wrong, email could not be sent!'
+        });
+        return;
+      }
+      console.log(info);
+      res
+        .status(200)
+        .json({ success: true, message: 'Email was sent successfully!' });
+    });
+  }
+);
 
 app.listen(PORT, () => {
-  console.log(`Server listening at port ${PORT}!`);
+  console.log(`Server listening on port ${PORT}!`);
 });
