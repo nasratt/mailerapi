@@ -1,34 +1,41 @@
-const bodyParser = require('body-parser');
-const express = require('express');
-const nodemailer = require('nodemailer');
+import express from 'express';
+import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
+import dotenv from 'dotenv';
+
+import { validateEmail } from './validation.js';
 
 const app = express();
-app.use(bodyParser.json());
+app.use(express.json());
+dotenv.config();
 
-function validateEmail(email) {
-  const regex =
-    /[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?/;
-  return regex.test(email);
-}
+const USER = process.env.USER;
+const PORT = process.env.PORT || 8080;
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+const REFRESH_TOKEN = process.env.REFRESH_TOKEN;
+const REDIRECT_URL = process.env.REDIRECT_URL;
 
-let mailAccount, transporter;
-async function init() {
-  mailAccount = await nodemailer.createTestAccount();
-  console.log(mailAccount);
-  transporter = nodemailer.createTransport({
-    host: mailAccount.smtp.host,
-    port: mailAccount.smtp.port,
-    secure: mailAccount.smtp.secure,
-    auth: {
-      user: mailAccount.user,
-      pass: mailAccount.pass
-    },
-    tls: {
-      rejectUnauthorized: false
-    }
-  });
-}
-init();
+const oauth2Client = new google.auth.OAuth2(
+  CLIENT_ID,
+  CLIENT_SECRET,
+  REDIRECT_URL
+);
+oauth2Client.setCredentials({ refresh_token: REFRESH_TOKEN });
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    type: 'OAuth2',
+    user: `${USER}`,
+    clientId: `${CLIENT_ID}`,
+    clientSecret: `${CLIENT_SECRET}`,
+    refreshToken: `${REFRESH_TOKEN}`
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
 
 app.post('/mailto', (req, res) => {
   const { reciever, emailBody, subject } = req.body;
@@ -45,7 +52,7 @@ app.post('/mailto', (req, res) => {
 
   // Message object
   let message = {
-    from: `${mailAccount.user}`,
+    from: `Janm Asti <${USER}>`,
     to: `${reciever}`,
     subject: `${subject}`,
     text: `${emailBody}`
@@ -58,14 +65,14 @@ app.post('/mailto', (req, res) => {
         success: false,
         message: 'Something went wrong, email could not be sent!'
       });
+      transporter.close();
       return;
     }
 
     res.json({ success: true, message: 'Email sent successfully!' });
-    console.log('Preview URL: %s', nodemailer.getTestMessageUrl(info));
   });
 });
 
-app.listen(process.env.PORT || 8080, () => {
-  console.log(`Listening at http://localhost:${process.env.PORT || 8080}`);
+app.listen(PORT, () => {
+  console.log(`Server listening at port ${PORT}!`);
 });
