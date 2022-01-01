@@ -4,7 +4,7 @@ This API can be used to send emails by providing the reciever address and email 
 
 The body of request should be in `json` fromat and have following format:
 
-```json
+```text
 {
   "from": String - required,
   "reciever": String - email - required,
@@ -16,7 +16,7 @@ The body of request should be in `json` fromat and have following format:
 
 The only endpoint in this API is `/mailto` and the method to be used is `POST`. Response to request has the following format:
 
-```json
+```text
 {
   "success": Boolean,
   "message": String
